@@ -1,3 +1,5 @@
+// This rule will create a new unique id when a Centerline is created
+
 //Define the leading text, the trailing text and the delimiter for the ID
 prefix = "RD"
 join_char = "-"
