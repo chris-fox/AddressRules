@@ -31,7 +31,6 @@ function getAddrNum(road, percentAlong, dir) {
         var from = road.fromRight;
         var to = road.toRight;    
     }
-    
     if (from == null || to == null) return null;
     var val = percentAlong * (to - from);
     var addrNum = 0;
@@ -43,6 +42,38 @@ function getAddrNum(road, percentAlong, dir) {
     return from + addrNum;
 }
 
+// This function will return intersect features geometry, the segment intersected and the distance along the line
+function IntersectingLineSegmentDistance(source_geom, interested_lines){
+    // Loop through the intersecting lines and find the segment of the line
+    for (var line in interested_lines) {
+        // Loop through the segments of the line. Handle multipart geometries
+        for (var part in Geometry(line).paths) {
+            var segment = Geometry(line).paths[part];
+
+            // Loop through the points in the segment
+            for (var i in segment) {
+                if (i == 0) continue;
+
+                // Construct a 2-point line segment from the current and previous point
+                var firstPoint = segment[i-1];
+                var secondPoint = segment[i]
+                var twoPointLine = Polyline({ 'paths' : [[[firstPoint.x, firstPoint.y], [secondPoint.x, secondPoint.y]]], 'spatialReference' : firstPoint.spatialReference});
+
+                // Test if the  point intersects the 2-point line segment
+                if (Intersects(source_geom, twoPointLine)) {
+                    // Construct a 2-point line segment using the previous point and the address point
+                    var lastSegment = Polyline({ 'paths' : [[[firstPoint.x, firstPoint.y], [source_geom.x, source_geom.y]]], 'spatialReference' : firstPoint.spatialReference});
+                    // Add to the total distance along the line and break the loop
+                    distanceAlongLine += Length(lastSegment);
+                    return [line, twoPointLine, distanceAlongLine]
+                }
+                // Add to the toal distance along the line
+                distanceAlongLine += Length(twoPointLine);
+            }
+        }
+    }
+    return null;
+}
 // Get the object id and geometry of the feature
 var oid = $feature.OBJECTID;
 var geom = Geometry($feature);
@@ -65,45 +96,13 @@ if (Count(intersectingRoads) == 0) return {
     "errorMessage": "Address Point must intersect at least one Road Centerline"
 };
 
-var intersectingRoad = null;
-var twoPtSegment = null;
-var distanceAlongLine = 0;
-
-// Loop through the intersecting roads
-for (var road in intersectingRoads) {
-    intersectingRoad = road;
-	
-	// Loop through the segments of the line. Handle multipart geometries
-    for (var part in Geometry(road).paths) {
-        var segment = Geometry(road).paths[part];
-
-		// Loop through the points in the segment
-        for (var i in segment) {
-            if (i == 0) continue;
-            
-			// Construct a 2-point line segment from the current and previous point
-            var firstPoint = segment[i-1];
-            var secondPoint = segment[i]
-            var line = Polyline({ 'paths' : [[[firstPoint.x, firstPoint.y], [secondPoint.x, secondPoint.y]]], 'spatialReference' : firstPoint.spatialReference});
-			
-			// Test if the address point intersects the 2-point line segment
-            if (Intersects(geom, line)) {
-				// Construct a 2-point line segment using the previous point and the address point
-                twoPtSegment = line;
-                var lastSegment = Polyline({ 'paths' : [[[firstPoint.x, firstPoint.y], [geom.x, geom.y]]], 'spatialReference' : firstPoint.spatialReference});
-                
-				// Add to the total distance along the line and break the loop
-				distanceAlongLine += Length(lastSegment);
-                break;
-            }
-			// Add to the toal distance along the line
-            distanceAlongLine += Length(line);             
-        }
-        if (twoPtSegment != null) break;           
-    }
-	// return after processing the first intersecting road
-    break;	
-}
+var results = IntersectingLineSegmentDistance(geom, intersectingRoads)
+if (IsEmpty(results)) return {
+    "errorMessage": "Intersecting segment not found"
+};
+var intersectingRoad = results[0];
+var twoPtSegment = results[1];
+var distanceAlongLine = results[2];
 
 // Construct a new point geometry offset perpendicularly from the road
 var xy = offsetPoint(twoPtSegment.paths[0][0], twoPtSegment.paths[0][1], geom, dist)
