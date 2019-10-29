@@ -38,24 +38,24 @@ var nameAliasAdds = [];
 
 // Loop through each intersecting road
 for (var road in intersectingRoads) {
-	// Continue to the next road if the intersecting road is the same or geometry is the same
+    // Continue to the next road if the intersecting road is the same or geometry is the same
     if (oid == road.OBJECTID || Equals(geom, road)) continue;
     
-	// Cut the intersecting road and continue if the result of the cut is 0 features
+    // Cut the intersecting road and continue if the result of the cut is 0 features
     var newRoads = Cut(road, geom);
     if (Count(newRoads) == 0) continue;
     
     var validCut = true;
     var geometries = []
     
-	// Loop through collection of lines and check that it was a valid cut in the middle of a segment
+    // Loop through collection of lines and check that it was a valid cut in the middle of a segment
     for (var i in newRoads) {
         if (newRoads[i] == null || Length(newRoads[i], 'feet') == 0) {
             validCut = false;
             continue;
         }
-		
-		// Handle multipart geometries
+        
+        // Handle multipart geometries
         var allParts  = MultiPartToSinglePart(newRoads[i]);
         for (var p in allParts )
         {
@@ -63,10 +63,10 @@ for (var road in intersectingRoads) {
         }
     }
 
-	// Process the cut if valid
+    // Process the cut if valid
     if (validCut) {
-		
-		// Get the address range of the intersecting road
+        
+        // Get the address range of the intersecting road
         var fromRight = road.fromright;
         var toRight = road.toright;
         var fromLeft = road.fromleft;
@@ -76,9 +76,9 @@ for (var road in intersectingRoads) {
         var secondGeomArray = [];    
         var firstPoint = Geometry(road).paths[0][0];
         
-		// Loop through each geometry in the cut
-		// Store the geometry including the first vertex of the orginal road as the first geometry
-		// Collect all other geometries in an array
+        // Loop through each geometry in the cut
+        // Store the geometry including the first vertex of the orginal road as the first geometry
+        // Collect all other geometries in an array
         for (var i in geometries) {
             if (Equals(firstPoint, geometries[i].paths[0][0])) {
                 firstGeometry = geometries[i];
@@ -88,51 +88,63 @@ for (var road in intersectingRoads) {
             }
         }
         
-		// Merge all other geometries as the second geometry
+        // Merge all other geometries as the second geometry
         var secondGeometry = Union(secondGeomArray);
-		
-		// Calculate the new address ranges based on the intersection location along the line
+        
+        // Calculate the new address ranges based on the intersection location along the line
         var geometryPercent = Length(firstGeometry, 'feet') / (Length(firstGeometry, 'feet') + Length(secondGeometry, 'feet'));
         var newToFromLeft = newToFrom(fromLeft, toLeft, geometryPercent)
         var newToFromRight = newToFrom(fromRight, toRight, geometryPercent)
         
-		// Store an update for the intersecting road with the first geometry from the cut and the new right to and left to value 
+        // Store an update for the intersecting road with the first geometry from the cut and the new right to and left to value 
         updates[Count(updates)] = {
             'objectID': road.OBJECTID,
             'attributes': {'toright' : newToFromRight[0], 'toleft' : newToFromLeft[0]},
             'geometry': firstGeometry
         }
 
-		// Create a new id for a road
-		// Store an add for a new road with the second geometry from the cut and the new right from and left from value 
+        // Create a new id for a road
+        // Store an add for a new road with the second geometry from the cut and the new right from and left from value 
         var newId = "RD-" + NextSequenceValue("CenterlineID");
         var featureAttributes = Dictionary(Text(road))['attributes'];
-	var newAttributes = {};
-	for(var k in featureAttributes) {
-		if (IndexOf(["globalid", "objectid", "shape_length", "shape_area"], Lower(k)) > -1) {
-			continue;
+		var newAttributes = {};
+		for(var k in featureAttributes) {
+			if (IndexOf(["globalid", "objectid", "shape_length", "shape_area"], Lower(k)) > -1) {
+				continue;
+			}
+			else if (Lower(k) == "fromright") {
+				newAttributes['fromright'] = newToFromRight[1];
+			}
+			else if (Lower(k) == "fromleft") {
+				newAttributes['fromleft'] = newToFromLeft[1];
+			}
+			else {
+				newAttributes[k] = featureAttributes[k];
+			}
 		}
-		else if (Lower(k) == "fromright") {
-			newAttributes['fromright'] = newToFromRight[1];
-		}
-		else if (Lower(k) == "fromleft") {
-			newAttributes['fromleft'] = newToFromLeft[1];
-		}
-		else {
-			newAttributes[k] = featureAttributes[k];
-		}
-	}
+		newAttributes['centerlineid'] = newId;
         adds[Count(adds)] = {
              'attributes': newAttributes,
              'geometry': secondGeometry
         }
         
-		// Find the all the related road alias names for the intersecting road
-		// Store an add for every road alias and related it to the new road that was added after the cut
+        // Find all the related road alias names for the intersecting road
+        // Store an add for every road alias and related it to the new road that was added after the cut
         var roadNameAliases = Filter(FeatureSetByName($datastore, "AliasStreetName"), "centerlineid = '" + road.centerlineid + "'");
         for (var roadNameAlias in roadNameAliases) {
+			var featureAttributes = Dictionary(Text(roadNameAlias))['attributes'];
+			var newAttributes = {};
+			for(var k in featureAttributes) {
+				if (IndexOf(["globalid", "objectid"], Lower(k)) > -1) {
+					continue;
+				}
+				else {
+					newAttributes[k] = featureAttributes[k];
+				}
+			}
+			newAttributes['centerlineid'] = newId
             nameAliasAdds[Count(nameAliasAdds)] = {
-                'attributes': {'centerlineid' : newId, 'roadpredir' : roadNameAlias.roadpredir, 'roadname' : roadNameAlias.roadname, 'roadtype' : roadNameAlias.roadtype,}
+                'attributes': newAttributes
             }
         }
     }
