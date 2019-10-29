@@ -107,21 +107,21 @@ for (var road in intersectingRoads) {
 		// Store an add for a new road with the second geometry from the cut and the new right from and left from value 
         var newId = "RD-" + NextSequenceValue("CenterlineID");
         var featureAttributes = Dictionary(Text(road))['attributes'];
-		var newAttributes = {};
-		for(var k in featureAttributes) {
-			if (IndexOf(["globalid", "objectid", "shape_length", "shape_area"], Lower(k)) > -1) {
-				continue;
-			}
-			else if (Lower(k) == "fromright") {
-				newAttributes['fromright'] = newToFromRight[1];
-			}
-			else if (Lower(k) == "fromleft") {
-				newAttributes['fromleft'] = newToFromLeft[1];
-			}
-			else {
-				newAttributes[k] = featureAttributes[k];
-			}
+	var newAttributes = {};
+	for(var k in featureAttributes) {
+		if (IndexOf(["globalid", "objectid", "shape_length", "shape_area"], Lower(k)) > -1) {
+			continue;
 		}
+		else if (Lower(k) == "fromright") {
+			newAttributes['fromright'] = newToFromRight[1];
+		}
+		else if (Lower(k) == "fromleft") {
+			newAttributes['fromleft'] = newToFromLeft[1];
+		}
+		else {
+			newAttributes[k] = featureAttributes[k];
+		}
+	}
         adds[Count(adds)] = {
              'attributes': newAttributes,
              'geometry': secondGeometry
